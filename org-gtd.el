@@ -372,6 +372,15 @@ the inbox.  Refile to `org-gtd-incubate-file-basename'."
   (org-schedule 0)
   (org-gtd--refile-incubate))
 
+(defun org-gtd--project-single-action ()
+  "Process GTD inbox by adding it to project."
+  (org-gtd--clarify-item)
+  (goto-char (point-min))
+  (org-set-tags-command)
+  (org-todo "TODO")
+  (org-gtd--refile-project-single-action)
+  )
+
 ;;;; sorting things is hard I need to make multiple files
 
 (defun org-gtd--nextify ()
@@ -408,7 +417,8 @@ This assumes the file is located in `org-gtd-directory'."
             (?d "delegate it" "give it to someone")
             (?s "single action" "do this when possible")
             (?a "archive this knowledge" "Store this where you store knowledge")
-            (?i "incubate it" "I'll come back to this later")))))
+            (?i "incubate it" "I'll come back to this later")
+            (?P "project single action" "do this when possible, linked to project")))))
     (cl-case (car action)
       (?q (org-gtd--quick-action))
       (?t (org-gtd--trash))
@@ -417,7 +427,8 @@ This assumes the file is located in `org-gtd-directory'."
       (?d (org-gtd--delegate))
       (?s (org-gtd--single-action))
       (?a (org-gtd--archive))
-      (?i (org-gtd--incubate)))))
+      (?i (org-gtd--incubate))
+      (?P (org-gtd--project-single-action)))))
 
 (defun org-gtd--project ()
   "Process GTD inbox item by transforming it into a project.
@@ -456,11 +467,43 @@ the inbox.  Mark it as done and archive."
   (org-todo "DONE")
   (org-archive-subtree))
 
+(defun org-gtd--get-projects-list ()
+  "Return a list of active projects."
+  (let ((headings))
+    (with-current-buffer (org-gtd--actionable-file)
+      (org-map-entries
+       (lambda ()
+         (push (org-element-property :title (org-element-at-point)) headings))
+       org-gtd-complete-projects)
+      )
+    headings))
+
 (defun org-gtd--refile-incubate ()
   (setq user-refile-targets org-refile-targets)
   (setq org-refile-targets `((,(org-gtd--path org-gtd-incubate-file-basename) :maxlevel . 2)))
   (org-refile)
   (setq org-refile-targets user-refile-targets))
+
+(defun org-gtd--refile-project-single-action ()
+  "Prompt the user for a project to refile the element under point to."
+  (let* ((project-heading (completing-read "Add to Project: "
+                                           (org-gtd--get-projects-list)
+                                           nil nil))
+         (project-refile-target (org-gtd--refile-target-project project-heading)))
+    (unless project-refile-target
+      (with-current-buffer (org-gtd--actionable-file)
+        (let* ((target (org-gtd--refile-target org-gtd-projects))
+               (selected-point (nth 3 target)))
+          (goto-char selected-point)
+          (org-insert-subheading t)
+          (insert project-heading)
+          (setq project-refile-target (org-gtd--refile-target-project project-heading))
+          )
+        )
+      )
+    (org-refile nil nil project-refile-target)
+    )
+  )
 
 (defun org-gtd--refile-target (heading-regexp)
   "Filters refile targets generated from `org-gtd--refile-targets' using HEADING-REGEXP."
@@ -477,6 +520,18 @@ the inbox.  Mark it as done and archive."
   (append (org-gtd--refile-incubate-targets) (org-gtd--refile-action-targets))
   ;; `((,(org-gtd--path org-gtd-incubate-file-basename) :maxlevel . 2)
   ;;   (,(org-gtd--path org-gtd-actionable-file-basename) :maxlevel . 1))
+  )
+
+(defun org-gtd--refile-target-project (project-name)
+  "Return a refile target targeting PROJECT-NAME."
+  (let* ((project-regex (concat ".*Projects/" project-name))
+         (result (cl-find-if
+                  (lambda (rfloc)
+                    (string-match project-regex (car rfloc)))
+                  (org-refile-get-targets (org-gtd--actionable-file))))
+         )
+    result
+    )
   )
 
 (defun org-gtd--refile-incubate-targets ()
