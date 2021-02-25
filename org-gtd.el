@@ -568,6 +568,11 @@ the inbox.  Set as a NEXT action and refile to
                                  entry (file ,(org-gtd--path org-gtd-inbox-file-basename))
                                  "* %?\n%U\n\n  %i"
                                  :kill-buffer t)
+                                       ("p" "Project entry"
+                                        entry (file ,(org-gtd--path org-gtd-inbox-file-basename))
+                                        "* %(completing-read \"Project: \"
+                                           (org-gtd--get-projects-list)
+                                           nil nil)\n** %? \n%i")
                                 ("l" "Todo with link"
                                  entry (file ,(org-gtd--path org-gtd-inbox-file-basename))
                                  "* %?\n%U\n\n  %i\n  %a"
