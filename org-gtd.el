@@ -443,9 +443,23 @@ the inbox.  Refile to `org-gtd-actionable-file-basename'."
   (goto-char (point-min))
   (org-set-tags-command)
   (org-gtd--nextify)
-  (org-refile nil nil (org-gtd--refile-target org-gtd-projects))
-  (with-current-buffer (org-gtd--actionable-file)
-    (org-update-statistics-cookies t)))
+  ;; Check if project exist, create it otherwise
+  (let* ((project-heading (org-element-property :title (org-element-at-point)))
+         (project-target (org-gtd--refile-target-project project-heading)))
+    (if project-target
+        (progn
+          (goto-char (point-min))
+          (delete-region (point-min) (line-end-position))
+          (kill-line)
+          (org-promote-subtree)
+          (org-refile nil nil project-target)
+          )
+      (org-refile nil nil (org-gtd--refile-target org-gtd-projects))
+      )
+    (with-current-buffer (org-gtd--actionable-file)
+      (org-update-statistics-cookies t))
+    )
+  )
 
 (defun org-gtd--project-complete-p ()
   "Return t if project complete, nil otherwise.
