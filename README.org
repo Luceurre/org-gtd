@@ -24,6 +24,7 @@ You have a number of possible choices for each item you process, which I will qu
 - *Calendar* :: This is a single item to be done at a given date or time. You'll be presented with org-mode's date picker, then it'll refile the item. You'll find this in the agenda later.
 - *Delegate* :: Let someone else do this. Write the name of the person doing it, and choose a time to check up on that item.
 - *Single action* :: This is a one-off to be done when possible. You can add tags to help you.
+- *Project Single Action* :: Same as single action but linked to a known project or create a new one.
 - *Reference* :: This is knowledge to be stored away. I'll describe how to handle these below.
 - *Incubate* :: no action now, review later
 
@@ -89,57 +90,58 @@ Finally, add this to your config:
 ** Configuring
 For your convenience, here's a commented elisp code block, assuming you are using =(use-package)=.
 #+begin_src emacs-lisp
-  (use-package org-gtd
-    :after org
-    :pin melpa-stable ;; or :pin melpa as you prefer
-    :demand t ;; without this, the package won't be loaded, so org-agenda won't be configured
-    :custom
-    ;; where org-gtd will put its files. This value is also the default one.
-    (org-gtd-directory "~/gtd/")
-    ;; package: https://github.com/Malabarba/org-agenda-property
-    ;; this is so you can see who an item was delegated to in the agenda
-    (org-agenda-property-list '("DELEGATED_TO"))
-    ;; I think this makes the agenda easier to read
-    (org-agenda-property-position 'next-line)
-    ;; package: https://www.nongnu.org/org-edna-el/
-    ;; org-edna is used to make sure that when a project task gets DONE,
-    ;; the next TODO is automatically changed to NEXT.
-    (org-edna-use-inheritance t)
-    :config
-    (org-edna-load)
-    :bind
-    (("C-c d c" . org-gtd-capture) ;; add item to inbox
-    ("C-c d a" . org-agenda-list) ;; see what's on your plate today
-    ("C-c d p" . org-gtd-process-inbox) ;; process entire inbox
-    ("C-c d n" . org-gtd-show-all-next) ;; see all NEXT items
-    ("C-c d s" . org-gtd-show-stuck-projects)) ;; see projects that don't have a NEXT item
-    :init
-    (bind-key "C-c c" 'org-gtd-clarify-finalize)) ;; the keybinding to hit when you're done editing an item in the processing phase
+(use-package org-gtd
+  :after org
+  :pin melpa-stable ;; or :pin melpa as you prefer
+  :demand t ;; without this, the package won't be loaded, so org-agenda won't be configured
+  :custom
+  ;; where org-gtd will put its files. This value is also the default one.
+  (org-gtd-directory "~/gtd/")
+  ;; package: https://github.com/Malabarba/org-agenda-property
+  ;; this is so you can see who an item was delegated to in the agenda
+  (org-agenda-property-list '("DELEGATED_TO"))
+  ;; I think this makes the agenda easier to read
+  (org-agenda-property-position 'next-line)
+  ;; package: https://www.nongnu.org/org-edna-el/
+  ;; org-edna is used to make sure that when a project task gets DONE,
+  ;; the next TODO is automatically changed to NEXT.
+  (org-edna-use-inheritance t)
+  :config
+  (org-edna-load)
+  ;; use as-is if you don't have an existing set of org-capture templates
+  ;; otherwise add to existing setup
+  ;; you can of course change the letters, too
+  ;; This is the default capture templates used by org-gtd
+  (setq org-gtd-capture-templates `(("i" "Inbox"
+                                     entry (file ,(org-gtd--path org-gtd-inbox-file-basename))
+                                     "* %?\n%U\n\n  %i"
+                                     :kill-buffer t)
+                                    ("l" "Todo with link"
+                                     entry (file ,(org-gtd--path org-gtd-inbox-file-basename))
+                                     "* %?\n%U\n\n  %i\n  %a"
+                                     :kill-buffer t)))
+  :bind
+  (("C-c d c" . org-gtd-capture) ;; add item to inbox
+   ("C-c d a" . org-agenda-list) ;; see what's on your plate today
+   ("C-c d p" . org-gtd-process-inbox) ;; process entire inbox
+   ("C-c d n" . org-gtd-show-all-next) ;; see all NEXT items
+   ("C-c d s" . org-gtd-show-stuck-projects)) ;; see projects that don't have a NEXT item
+  :init
+  (bind-key "C-c c" 'org-gtd-clarify-finalize)) ;; the keybinding to hit when you're done editing an item in the processing phase
 
-  (use-package org-agenda
-    :ensure nil ;; this is how you tell use-package to manage a sub-package
-    :after org-gtd ;; because we need to add the org-gtd directory to the agenda files
-    :config
-    ;; use as-is if you don't have an existing org-agenda setup
-    ;; otherwise push the directory to the existing list
-    (org-agenda-files `(,org-gtd-directory))
-    ;; a useful view to see what can be accomplished today
-    (setq org-agenda-custom-commands '(("g" "Scheduled today and all NEXT items" ((agenda "" ((org-agenda-span 1))) (todo "NEXT"))))))
+(use-package org-agenda
+  :ensure nil ;; this is how you tell use-package to manage a sub-package
+  :after org-gtd ;; because we need to add the org-gtd directory to the agenda files
+  :config
+  ;; use as-is if you don't have an existing org-agenda setup
+  ;; otherwise push the directory to the existing list
+  (org-agenda-files `(,org-gtd-directory))
+  ;; a useful view to see what can be accomplished today
+  (setq org-agenda-custom-commands '(("g" "Scheduled today and all NEXT items" ((agenda "" ((org-agenda-span 1))) (todo "NEXT"))))))
 
-    (use-package org-capture
-      :ensure nil
-      ;; note that org-gtd has to be loaded before this
-      :after org-gtd
-      :config
-      ;; use as-is if you don't have an existing set of org-capture templates
-      ;; otherwise add to existing setup
-      ;; you can of course change the letters, too
-      (setq org-capture-templates `(("i" "Inbox"
-                                   entry (file ,(org-gtd--path org-gtd-inbox-file-basename))
-                                   "* %?\n%U\n\n  %i"
-                                   :kill-buffer t)
-                                  ("l" "Todo with link"
-                                   entry (file ,(org-gtd--path org-gtd-inbox-file-basename))
-                                   "* %?\n%U\n\n  %i\n  %a"
-                                   :kill-buffer t))))
+(use-package org-capture
+  :ensure nil
+  ;; note that org-gtd has to be loaded before this
+  :after org-gtd
+  )
 #+end_src

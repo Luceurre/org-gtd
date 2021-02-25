@@ -210,6 +210,7 @@ This is the directory where to look for the files used in
 this Org-mode based GTD implementation."
   :type 'directory)
 
+
 ;;;; Commands
 
 (defun org-gtd-archive-complete-projects ()
@@ -234,7 +235,10 @@ Wraps the function `org-capture' to ensure the inbox exists.
 For GOTO and KEYS, see `org-capture' documentation for the variables of the same name."
   (interactive)
   (kill-buffer (org-gtd--inbox-file))
-  (org-capture GOTO KEYS))
+  (let ((org-capture-templates org-gtd-capture-templates))
+(org-capture GOTO KEYS)
+)
+  )
 
 (defun org-gtd-clarify-finalize ()
   "Finalize the clarify process."
@@ -559,6 +563,16 @@ the inbox.  Set as a NEXT action and refile to
   (org-set-tags-command)
   (org-todo "CANCELED")
   (org-archive-subtree))
+
+(defcustom org-gtd-capture-templates `(("i" "Inbox"
+                                 entry (file ,(org-gtd--path org-gtd-inbox-file-basename))
+                                 "* %?\n%U\n\n  %i"
+                                 :kill-buffer t)
+                                ("l" "Todo with link"
+                                 entry (file ,(org-gtd--path org-gtd-inbox-file-basename))
+                                 "* %?\n%U\n\n  %i\n  %a"
+                                 :kill-buffer t))
+  "Templates for Org GTD Capture. Must be in the same format as Org Capture.")
 
 (provide 'org-gtd)
 
