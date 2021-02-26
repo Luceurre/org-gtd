@@ -143,7 +143,7 @@
 (defconst org-gtd-projects  ".*Projects")
 
 (defconst org-gtd-complete-projects
-  "+LEVEL=2+CATEGORY=\"Projects\""
+  "+LEVEL=2+CATEGORY=\"Projects\"|+LEVEL>2+TODO=\"SUBPROJ\""
   "How to identify projects in the GTD system.")
 
 (defconst org-gtd-stuck-projects
@@ -422,7 +422,8 @@ This assumes the file is located in `org-gtd-directory'."
             (?s "single action" "do this when possible")
             (?a "archive this knowledge" "Store this where you store knowledge")
             (?i "incubate it" "I'll come back to this later")
-            (?P "project single action" "do this when possible, linked to project")))))
+            (?P "project single action" "do this when possible, linked to project")
+            (?S "subproject" "divide and conquer")))))
     (cl-case (car action)
       (?q (org-gtd--quick-action))
       (?t (org-gtd--trash))
@@ -432,7 +433,8 @@ This assumes the file is located in `org-gtd-directory'."
       (?s (org-gtd--single-action))
       (?a (org-gtd--archive))
       (?i (org-gtd--incubate))
-      (?P (org-gtd--project-single-action)))))
+      (?P (org-gtd--project-single-action))
+      (?S (org-gtd--subproject)))))
 
 (defun org-gtd--project ()
   "Process GTD inbox item by transforming it into a project.
@@ -460,6 +462,24 @@ the inbox.  Refile to `org-gtd-actionable-file-basename'."
       (org-update-statistics-cookies t))
     )
   )
+
+(defun org-gtd--subproject ()
+  "Process GTD inbox item by transforming it into a subproject.
+Parent project will be created if it doesn't exist."
+  (org-gtd--clarify-item)
+  (goto-char (point-min))
+  (org-set-tags-command)
+  (org-gtd--nextify)
+  (let* ((parent-project-heading (completing-read "Parent project: "
+                                                  (org-gtd--get-projects-list)
+                                                  nil nil))
+         (parent-project-target (org-gtd--refile-target-project parent-project-heading)))
+    (if parent-project-target
+        (org-refile nil nil parent-project-target)
+      (org-gtd--create-project parent-project-heading)
+      (setq parent-project-target (org-gtd--refile-target-project parent-project-heading))
+      (org-refile nil nil parent-project-target)
+      )))
 
 (defun org-gtd--project-complete-p ()
   "Return t if project complete, nil otherwise.
@@ -502,6 +522,16 @@ the inbox.  Mark it as done and archive."
   (org-refile)
   (setq org-refile-targets user-refile-targets))
 
+(defun org-gtd--create-project (project-heading)
+  "Create a new project with heading PROJECT-HEADING in GTD actionnable file."
+  (with-current-buffer (org-gtd--actionable-file)
+    (let* ((target (org-gtd--refile-target org-gtd-projects))
+           (selected-point (nth 3 target)))
+      (goto-char selected-point)
+      (org-insert-subheading t)
+      (insert project-heading)))
+  )
+
 (defun org-gtd--refile-project-single-action ()
   "Prompt the user for a project to refile the element under point to."
   (let* ((project-heading (completing-read "Add to Project: "
@@ -509,15 +539,8 @@ the inbox.  Mark it as done and archive."
                                            nil nil))
          (project-refile-target (org-gtd--refile-target-project project-heading)))
     (unless project-refile-target
-      (with-current-buffer (org-gtd--actionable-file)
-        (let* ((target (org-gtd--refile-target org-gtd-projects))
-               (selected-point (nth 3 target)))
-          (goto-char selected-point)
-          (org-insert-subheading t)
-          (insert project-heading)
-          (setq project-refile-target (org-gtd--refile-target-project project-heading))
-          )
-        )
+      (org-gtd--create-project project-heading)
+      (setq project-refile-target (org-gtd--refile-target-project project-heading))
       )
     (org-refile nil nil project-refile-target)
     )
