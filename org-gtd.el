@@ -185,6 +185,7 @@ This is a list of four items, the same type as in `org-stuck-projects'.")
   "#+STARTUP: overview indent align inlineimages hidestars logdone logrepeat logreschedule logredeadline
 #+TODO: NEXT(n) TODO(t) WAIT(w@) | DONE(d) CANCELED(c@)
 #+FILETAGS: :PROJECT:
+* ?F
 "
   "Template for a GTD project.")
 
@@ -323,10 +324,10 @@ Create the file and template first if it doesn't already exist."
     (or (f-file-p file-path)
         (with-current-buffer file-buffer
           (org-mode)
-          (insert (symbol-value
+          (insert (replace-regexp-in-string "\?F" gtd-file (symbol-value
                    (intern
                     (string-join
-                     `("org-gtd-" ,gtd-type "-template")))))
+                     `("org-gtd-" ,gtd-type "-template"))))))
           (org-mode-restart)
           (save-buffer)))
     file-buffer))
@@ -583,10 +584,19 @@ the inbox.  Mark it as done and archive."
   ;;   (,(org-gtd--path org-gtd-actionable-file-basename) :maxlevel . 1))
   )
 
-(defun org-gtd--refile-target-project (project-heading)
-  "Return a refile target targeting PROJECT-HEADING."
-(car (org-refile-get-targets (org-gtd--project-file project-heading)))
+(defun org-gtd--refile-targets-project (project-heading)
+  "Return a refile targets targeting PROJECT-HEADING file."
+(org-refile-get-targets (org-gtd--project-file project-heading))
   )
+
+(defun org-gtd--refile-target-project (project-heading)
+  (let* ((org-refile-targets (org-gtd--refile-targets-project project-heading))
+         (results (cl-find-if
+                   (lambda (rfloc)
+                     (string-match project-heading
+                                   (car rfloc)))
+                   (org-refile-get-targets))))
+    results))
 
 (defun org-gtd--refile-incubate-targets ()
   `((,(org-gtd--path org-gtd-incubate-file-basename) :maxlevel . 2)))
