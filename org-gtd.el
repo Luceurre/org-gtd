@@ -97,6 +97,15 @@ this Org-mode based GTD implementation."
 (defvar org-gtd-command-map (make-sparse-keymap)
   "Keymap for function `org-gtd-user-input-mode', a minor mode.")
 
+(defun org-gtd--init ()
+  "Initialize org-gtd."
+  (org-gtd--find-or-create-and-save-files))
+
+(defun org-gtd--find-or-create-and-save-files ()
+  (mapcar
+   (lambda (buffer) (with-current-buffer buffer (save-buffer) buffer))
+   `(,(org-gtd--actions-file) ,(org-gtd--inbox-file))))
+
 (defun org-gtd--path (file)
   "Return the full path to FILE.org.
 This assumes the file is located in `org-gtd-directory'."
@@ -111,7 +120,7 @@ GTD-FILE is a special argument to override filename and build template for proje
     (or (f-file-p file-path)
         (with-current-buffer file-buffer
           (org-mode)
-          (insert (replace-regexp-in-string "\?F" gtd-file (symbol-value
+          (insert (replace-regexp-in-string "\?F" (file-name-nondirectory gtd-file) (symbol-value
                    (intern
                     (string-join
                      `("org-gtd-" ,gtd-type "-template"))))))
@@ -139,8 +148,7 @@ GTD-FILE is a special argument to override filename and build template for proje
 
 (defun org-gtd--project-path (project-title)
 "Return project relative path"
-(concat org-gtd-projects-base-dir (concat project-title ".org"))
-)
+(concat org-gtd-projects-base-dir project-title))
 
 (defun org-gtd--project-file (project-title)
 "Create or return the buffer to the GTD project file."
@@ -238,7 +246,9 @@ the inbox.  Mark it as done and archive."
 "Process GTD inbox item by transforming it into a project."
   (goto-char (point-min))
   (let* ((project-title (org-element-property :title (org-element-at-point)))
-         (projet-target (org-gtd--refile-project-target)))))
+    (project-target (org-gtd--refile-project-target project-title)))
+    (org-refile nil nil project-target)
+    (merge-headings (org-gtd--project-file project-title))))
 
 (defun org-gtd--single-action ()
   "Process GTD inbox item as a single action.
@@ -247,7 +257,6 @@ Allow the user apply user-defined tags from
 the inbox.  Set as a NEXT action and refile to
 `org-gtd-actionable-file-basename'."
   (goto-char (point-min))
-  (org-set-tags-command)
   (org-todo "NEXT")
   (org-refile nil nil (org-gtd--refile-actions-target)))
 
@@ -282,7 +291,7 @@ the inbox."
 (defun org-gtd--clarify ()
 "Allow the user to apply org-tags, priority and effort in the inbox."
         (goto-char (point-min))
-        (org-set-tags)
+        (org-set-tags-command)
         (org-priority)
         (org-set-effort))
 
@@ -332,7 +341,11 @@ the inbox."
   `((,((org-gtd--projects-files-path)) :maxlevel . 10)))
 
 (defun org-gtd--refile-project-target (project-title)
-  (org-gtd--refile-target project-title (org-gtd--refile-project-targets)))
+  "Create project file named PROJECT-TITLE and return a refile target pointing to it."
+(org-gtd--project-file project-title)
+  (let ((project-path (org-gtd--path (org-gtd--project-path project-title))))
+(list nil project-path nil nil)
+        ))
 
 (defun org-gtd--refile-project-target-or-create-it (project-title)
 (let ((project-target (org-gtd--refile-project-target project-title)))
@@ -355,6 +368,53 @@ entry (file ,(org-gtd--path org-gtd-inbox-file-basename))
 "* %?\n%U\n\n  %i\n  %a"
 :kill-buffer t))
 "Templates for Org GTD Capture. Must be in the same format as Org Capture.")
+
+(defun get-headings-position (org-buffer level)
+  "Return an a-list with key the name of the heading at LEVEL in the ORG-BUFFER and value a list of their point (position) in the file."
+  (let ((level (or level 1))
+        (result))
+    (with-current-buffer org-buffer
+      (org-map-entries
+       (lambda () (let ((heading (org-element-property :title (org-element-at-point))))
+                    (if (assoc heading result)
+                        (push (point) (cdr (assoc heading result)))
+                      (map-put result heading (list (point))))))
+       (concat "+LEVEL=" (number-to-string level))))
+    result))
+
+(defun merge--headings (level)
+  "Merge headings with the same name in current buffer at LEVEL.
+Side effects include entries sorting by alphabetical order."
+                                        ; We sort headings at cursor position.
+  (ignore-errors (org-sort-entries t ?a))
+
+                                        ; We merge subtrees if same headings.
+  (let* ((level level) (headings (get-headings-position (current-buffer) level)))
+    (dolist (heading headings)
+      (let ((positions (sort (cdr heading) '<)))
+        (when (> (length positions) 1)
+          (let ((to-merge (cdr positions)))
+            (dolist (to-merge-element to-merge)
+              (goto-char to-merge-element)
+              (kill-whole-line)))))))
+
+                                        ; We do this again for each subtree.
+  (org-map-entries
+   (lambda () (progn
+                (org-narrow-to-element)
+                (merge--headings (+ 1 level))
+                (widen)))
+   (concat "+LEVEL=" (number-to-string level))))
+
+(defun merge-headings (org-buffer)
+  "Merge headings in ORG-BUFFER."
+  (with-current-buffer org-buffer
+    (goto-char (point-min))
+    (merge--headings 1)))
+
+
+
+(org-gtd--init)
 
 (provide 'org-gtd)
 
