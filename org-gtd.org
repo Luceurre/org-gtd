@@ -143,7 +143,7 @@ GTD-FILE is a special argument to override filename and build template for proje
     (or (f-file-p file-path)
         (with-current-buffer file-buffer
           (org-mode)
-          (insert (replace-regexp-in-string "\?F" (file-name-nondirectory gtd-file) (symbol-value
+          (insert (replace-regexp-in-string "\?F" (file-name-nondirectory file-path) (symbol-value
                    (intern
                     (string-join
                      `("org-gtd-" ,gtd-type "-template"))))))
